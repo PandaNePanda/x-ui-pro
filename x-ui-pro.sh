@@ -1,4 +1,3 @@
-
 #!/bin/bash
 #################### x-ui-pro v2.4.3 @ github.com/GFW4Fun ##############################################
 [[ $EUID -ne 0 ]] && echo "not root!" && sudo su -
@@ -54,7 +53,9 @@ sub_path=$(tr -dc A-Za-z0-9 </dev/urandom | head -c "$(shuf -i 6-12 -n 1)")
 json_path=$(tr -dc A-Za-z0-9 </dev/urandom | head -c "$(shuf -i 6-12 -n 1)")
 panel_path=$(tr -dc A-Za-z0-9 </dev/urandom | head -c "$(shuf -i 6-12 -n 1)")
 ws_port=$(make_port)
-ws_path=$(tr -dc A-Za-z0-9 </dev/urandom | head -c "$(shuf -i 6-12 -n 1)")web_path
+trojan_port=$(make_port)
+ws_path=$(tr -dc A-Za-z0-9 </dev/urandom | head -c "$(shuf -i 6-12 -n 1)")
+trojan_path=$(tr -dc A-Za-z0-9 </dev/urandom | head -c "$(shuf -i 6-12 -n 1)")
 xhttp_path=$(tr -dc A-Za-z0-9 </dev/urandom | head -c "$(shuf -i 6-12 -n 1)")
 config_username=$(gen_random_string 10)
 config_password=$(gen_random_string 10)
@@ -563,20 +564,45 @@ server {
 }
 EOF
 ##################################Check Nginx status####################################################
-if [[ -f "/etc/nginx/sites-available/${domain}" ]]; then
-	unlink "/etc/nginx/sites-enabled/default" >/dev/null 2>&1
-	rm -f "/etc/nginx/sites-enabled/default" "/etc/nginx/sites-available/default"
-	ln -s "/etc/nginx/sites-available/${domain}" "/etc/nginx/sites-enabled/" 2>/dev/null
-        ln -s "/etc/nginx/sites-available/${reality_domain}" "/etc/nginx/sites-enabled/" 2>/dev/null
-	ln -s "/etc/nginx/sites-available/80.conf" "/etc/nginx/sites-enabled/" 2>/dev/null
-else
+# Удаляем старые симлинки, если они существуют
+rm -f "/etc/nginx/sites-enabled/default" "/etc/nginx/sites-available/default"
+rm -f "/etc/nginx/sites-enabled/${domain}"
+rm -f "/etc/nginx/sites-enabled/${reality_domain}"
+rm -f "/etc/nginx/sites-enabled/80.conf"
+
+# Проверяем существование конфигурационных файлов
+if [[ ! -f "/etc/nginx/sites-available/${domain}" ]]; then
 	msg_err "${domain} nginx config not exist!" && exit 1
 fi
 
-if [[ $(nginx -t 2>&1 | grep -o 'successful') != "successful" ]]; then
-    msg_err "nginx config is not ok!" && exit 1
+if [[ ! -f "/etc/nginx/sites-available/${reality_domain}" ]]; then
+	msg_err "${reality_domain} nginx config not exist!" && exit 1
+fi
+
+if [[ ! -f "/etc/nginx/sites-available/80.conf" ]]; then
+	msg_err "80.conf nginx config not exist!" && exit 1
+fi
+
+# Создаём симлинки
+ln -sf "/etc/nginx/sites-available/${domain}" "/etc/nginx/sites-enabled/${domain}"
+ln -sf "/etc/nginx/sites-available/${reality_domain}" "/etc/nginx/sites-enabled/${reality_domain}"
+ln -sf "/etc/nginx/sites-available/80.conf" "/etc/nginx/sites-enabled/80.conf"
+
+# Проверяем, что симлинки созданы успешно
+if [[ ! -L "/etc/nginx/sites-enabled/${domain}" ]] || [[ ! -L "/etc/nginx/sites-enabled/${reality_domain}" ]] || [[ ! -L "/etc/nginx/sites-enabled/80.conf" ]]; then
+	msg_err "Failed to create nginx symlinks!" && exit 1
+fi
+
+# Тестируем конфигурацию nginx
+nginx_test_output=$(nginx -t 2>&1)
+if [[ $(echo "$nginx_test_output" | grep -o 'successful') != "successful" ]]; then
+    msg_err "nginx config is not ok!"
+    echo "$nginx_test_output"
+    exit 1
 else
-	systemctl start nginx 
+	msg_ok "nginx config is OK!"
+	systemctl start nginx
+	systemctl status nginx --no-pager
 fi
 
 
@@ -598,10 +624,11 @@ if [[ -f $XUIDB ]]; then
         client_id=$(/usr/local/x-ui/bin/xray-linux-amd64 uuid)
         client_id2=$(/usr/local/x-ui/bin/xray-linux-amd64 uuid)
         client_id3=$(/usr/local/x-ui/bin/xray-linux-amd64 uuid)
+		trojan-pass=$(tr -dc A-Za-z0-9 </dev/urandom | head -c "$(shuf -i 6-12 -n 1)")
         emoji_flag=$(LC_ALL=en_US.UTF-8 curl -s https://ipwho.is/ | jq -r '.flag.emoji')
        	sqlite3 $XUIDB <<EOF
              INSERT INTO "settings" ("key", "value") VALUES ("subPort",  '${sub_port}');
-	     INSERT INTO "settings" ("key", "value") VALUES ("subPath",  '${sub_path}');
+	     INSERT INTO "settings" ("key", "value") VALUES ("subPath",  '/${sub_path}/');
 	     INSERT INTO "settings" ("key", "value") VALUES ("subURI",  '${sub_uri}');
              INSERT INTO "settings" ("key", "value") VALUES ("subJsonPath",  '${json_path}');
 	     INSERT INTO "settings" ("key", "value") VALUES ("subJsonURI",  '${json_uri}');
@@ -640,6 +667,8 @@ if [[ -f $XUIDB ]]; then
 	     INSERT INTO "settings" ("key", "value") VALUES ("datepicker",  'gregorian');
              INSERT INTO "client_traffics" ("inbound_id","enable","email","up","down","expiry_time","total","reset") VALUES ('1','1','first','0','0','0','0','0');
 	     INSERT INTO "client_traffics" ("inbound_id","enable","email","up","down","expiry_time","total","reset") VALUES ('2','1','first_1','0','0','0','0','0');
+		   INSERT INTO "client_traffics" ("inbound_id","enable","email","up","down","expiry_time","total","reset") VALUES ('3','1','firstX','0','0','0','0','0');
+	     INSERT INTO "client_traffics" ("inbound_id","enable","email","up","down","expiry_time","total","reset") VALUES ('4','1','firstT','0','0','0','0','0');
              INSERT INTO "inbounds" ("user_id","up","down","total","remark","enable","expiry_time","listen","port","protocol","settings","stream_settings","tag","sniffing") VALUES ( 
              '1',
 	     '0',
@@ -876,6 +905,66 @@ if [[ -f $XUIDB ]]; then
   "routeOnly": false
 }'
 	     );
+	INSERT INTO "inbounds" ("user_id","up","down","total","remark","enable","expiry_time","listen","port","protocol","settings","stream_settings","tag","sniffing") VALUES ( 
+	     '1',
+	     '0',
+         '0',
+	     '0',
+         '${emoji_flag} trojan-grpc',
+	     '1',
+         '0',
+		 '',
+		 '${trojan_port}',
+		 'trojan',
+		 '{
+  "clients": [
+    {
+      "comment": "",
+      "created_at": 1756726925000,
+      "email": "firstT",
+      "enable": true,
+      "expiryTime": 0,
+      "limitIp": 0,
+      "password": "${trojan-pass}",
+      "reset": 0,
+      "subId": "first",
+      "tgId": 0,
+      "totalGB": 0,
+      "updated_at": 1756726925000
+    }
+  ],
+  "fallbacks": []
+}',
+'{
+  "network": "grpc",
+  "security": "none",
+  "externalProxy": [
+    {
+      "forceTls": "tls",
+      "dest": "${domain}",
+      "port": 443,
+      "remark": ""
+    }
+  ],
+  "grpcSettings": {
+    "serviceName": "/${trojan_port}/${trojan_path}",
+    "authority": "${domain}",
+    "multiMode": false
+  }
+}',
+'inbound-${trojan_port}',
+'{
+  "enabled": false,
+  "destOverride": [
+    "http",
+    "tls",
+    "quic",
+    "fakedns"
+  ],
+  "metadataOnly": false,
+  "routeOnly": false
+}'
+	);
 EOF
 /usr/local/x-ui/x-ui setting -username "${config_username}" -password "${config_password}" -port "${panel_port}" -webBasePath "${panel_path}"
 x-ui start
