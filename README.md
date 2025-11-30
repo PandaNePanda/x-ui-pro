@@ -1,5 +1,6 @@
 Устанавливать:
-sudo bash <(wget -qO- https://raw.githubusercontent.com/PandaNePanda/x-ui-pro/master/x-ui-pro.sh) -install yes -subdomain #СЮДА_1_ДОМЕН -reality_domain №СЮДА_2_ДОМЕН
+wget -q https://raw.githubusercontent.com/PandaNePanda/x-ui-pro/master/x-ui-pro.sh -O install.sh && chmod +x install.sh && sudo ./install.sh -install yes -subdomain #ДОМЕН_1 -reality_domain #ДОМЕН_2
+
 
 ## x-ui-pro (x-ui + nginx) modification of https://github.com/GFW4Fun/x-ui-pro for REALITY
 - Auto Installation (lightweight)
