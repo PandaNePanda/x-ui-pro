@@ -158,13 +158,13 @@ IP6=$(ip route get 2620:fe::fe 2>&1 | grep -Po -- 'src \K\S*')
 [[ $IP4 =~ $IP4_REGEX ]] || IP4=$(curl -s ipv4.icanhazip.com);
 [[ $IP6 =~ $IP6_REGEX ]] || IP6=$(curl -s ipv6.icanhazip.com);
 ##############################Install SSL###############################################################
-systemctl stop nginx; certbot certonly --standalone --non-interactive --agree-tos --register-unsafely-without-email -d "$domain"
+certbot certonly --standalone --non-interactive --agree-tos --register-unsafely-without-email -d "$domain"
 if [[ ! -d "/etc/letsencrypt/live/${domain}/" ]]; then
  	systemctl start nginx >/dev/null 2>&1
 	msg_err "$domain SSL could not be generated! Check Domain/IP Or Enter new domain!" && exit 1
 fi
 
-systemctl stop nginx; certbot certonly --standalone --non-interactive --agree-tos --register-unsafely-without-email -d "$reality_domain"
+certbot certonly --standalone --non-interactive --agree-tos --register-unsafely-without-email -d "$reality_domain"
 if [[ ! -d "/etc/letsencrypt/live/${reality_domain}/" ]]; then
  	systemctl start nginx >/dev/null 2>&1
 	msg_err "$reality_domain SSL could not be generated! Check Domain/IP Or Enter new domain!" && exit 1
@@ -567,9 +567,9 @@ EOF
 if [[ -f "/etc/nginx/sites-available/${domain}" ]]; then
 	unlink "/etc/nginx/sites-enabled/default" >/dev/null 2>&1
 	rm -f "/etc/nginx/sites-enabled/default" "/etc/nginx/sites-available/default"
-	ln -s "/etc/nginx/sites-available/${domain}" "/etc/nginx/sites-enabled/" 2>/dev/null
-        ln -s "/etc/nginx/sites-available/${reality_domain}" "/etc/nginx/sites-enabled/" 2>/dev/null
-	ln -s "/etc/nginx/sites-available/80.conf" "/etc/nginx/sites-enabled/" 2>/dev/null
+	ln -sf "/etc/nginx/sites-available/${domain}" "/etc/nginx/sites-enabled/${domain}" 2>/dev/null
+        ln -sf "/etc/nginx/sites-available/${reality_domain}" "/etc/nginx/sites-enabled/${reality_domain}" 2>/dev/null
+	ln -sf "/etc/nginx/sites-available/80.conf" "/etc/nginx/sites-enabled/80.conf" 2>/dev/null
 else
 	msg_err "${domain} nginx config not exist!" && exit 1
 fi
@@ -1080,3 +1080,4 @@ else
 	msg_err "sqlite and x-ui to be checked, try on a new clean linux! "
 fi
 #################################################N-joy##################################################
+
