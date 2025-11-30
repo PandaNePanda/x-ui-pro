@@ -158,13 +158,13 @@ IP6=$(ip route get 2620:fe::fe 2>&1 | grep -Po -- 'src \K\S*')
 [[ $IP4 =~ $IP4_REGEX ]] || IP4=$(curl -s ipv4.icanhazip.com);
 [[ $IP6 =~ $IP6_REGEX ]] || IP6=$(curl -s ipv6.icanhazip.com);
 ##############################Install SSL###############################################################
-certbot certonly --standalone --non-interactive --agree-tos --register-unsafely-without-email -d "$domain"
+systemctl stop nginx; certbot certonly --standalone --non-interactive --agree-tos --register-unsafely-without-email -d "$domain"
 if [[ ! -d "/etc/letsencrypt/live/${domain}/" ]]; then
  	systemctl start nginx >/dev/null 2>&1
 	msg_err "$domain SSL could not be generated! Check Domain/IP Or Enter new domain!" && exit 1
 fi
 
-certbot certonly --standalone --non-interactive --agree-tos --register-unsafely-without-email -d "$reality_domain"
+systemctl stop nginx; certbot certonly --standalone --non-interactive --agree-tos --register-unsafely-without-email -d "$reality_domain"
 if [[ ! -d "/etc/letsencrypt/live/${reality_domain}/" ]]; then
  	systemctl start nginx >/dev/null 2>&1
 	msg_err "$reality_domain SSL could not be generated! Check Domain/IP Or Enter new domain!" && exit 1
@@ -228,7 +228,7 @@ upstream www {
 
 server {
     proxy_protocol on;
-    set_real_ip_from unix:;
+    
     listen          443;
     proxy_pass      \$sni_name;
     ssl_preread     on;
@@ -564,47 +564,20 @@ server {
 }
 EOF
 ##################################Check Nginx status####################################################
-# Удаляем старые симлинки
-rm -f "/etc/nginx/sites-enabled/default" "/etc/nginx/sites-available/default"
-rm -f "/etc/nginx/sites-enabled/${domain}"
-rm -f "/etc/nginx/sites-enabled/${reality_domain}"
-rm -f "/etc/nginx/sites-enabled/80.conf"
-
-# Проверяем существование конфигурационных файлов
-if [[ ! -f "/etc/nginx/sites-available/${domain}" ]]; then
+if [[ -f "/etc/nginx/sites-available/${domain}" ]]; then
+	unlink "/etc/nginx/sites-enabled/default" >/dev/null 2>&1
+	rm -f "/etc/nginx/sites-enabled/default" "/etc/nginx/sites-available/default"
+	ln -s "/etc/nginx/sites-available/${domain}" "/etc/nginx/sites-enabled/" 2>/dev/null
+        ln -s "/etc/nginx/sites-available/${reality_domain}" "/etc/nginx/sites-enabled/" 2>/dev/null
+	ln -s "/etc/nginx/sites-available/80.conf" "/etc/nginx/sites-enabled/" 2>/dev/null
+else
 	msg_err "${domain} nginx config not exist!" && exit 1
 fi
 
-if [[ ! -f "/etc/nginx/sites-available/${reality_domain}" ]]; then
-	msg_err "${reality_domain} nginx config not exist!" && exit 1
-fi
-
-if [[ ! -f "/etc/nginx/sites-available/80.conf" ]]; then
-	msg_err "80.conf nginx config not exist!" && exit 1
-fi
-
-# Создаём симлинки с правильными именами
-ln -sf "/etc/nginx/sites-available/${domain}" "/etc/nginx/sites-enabled/${domain}"
-ln -sf "/etc/nginx/sites-available/${reality_domain}" "/etc/nginx/sites-enabled/${reality_domain}"
-ln -sf "/etc/nginx/sites-available/80.conf" "/etc/nginx/sites-enabled/80.conf"
-
-# Проверяем создание симлинков
-if [[ ! -L "/etc/nginx/sites-enabled/${domain}" ]] || [[ ! -L "/etc/nginx/sites-enabled/${reality_domain}" ]] || [[ ! -L "/etc/nginx/sites-enabled/80.conf" ]]; then
-	msg_err "Failed to create nginx symlinks!" && exit 1
-fi
-
-# Тестируем конфигурацию nginx
-nginx_test_output=$(nginx -t 2>&1)
-if [[ $(echo "$nginx_test_output" | grep -o 'successful') != "successful" ]]; then
-    msg_err "nginx config is not ok!"
-    echo "--- NGINX TEST OUTPUT ---"
-    echo "$nginx_test_output"
-    echo "-------------------------"
-    exit 1
+if [[ $(nginx -t 2>&1 | grep -o 'successful') != "successful" ]]; then
+    msg_err "nginx config is not ok!" && exit 1
 else
-	msg_ok "nginx config is OK!"
-	systemctl start nginx
-	systemctl status nginx --no-pager -l
+	systemctl start nginx 
 fi
 
 
